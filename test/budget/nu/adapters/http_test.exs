@@ -2,10 +2,9 @@ defmodule Budget.Nu.Adapters.HttpTest do
   use Budget.HttpCase, async: true
 
   alias Budget.Nu.Adapters.Http
-  alias Budget.Nu.Adapters.ResponseMock
 
   setup do
-    opts = options()
+    opts = opts()
     username = Keyword.fetch!(opts, :username)
     password = Keyword.fetch!(opts, :password)
     cert_path = Keyword.fetch!(opts, :cert_path)
@@ -15,7 +14,6 @@ defmodule Budget.Nu.Adapters.HttpTest do
   describe "discovery/1" do
     test "successful response", context do
       %{bypass: bypass, base_url: base_url} = context
-      # base_url = Keyword.fetch!(options(), :base_url)
 
       setup_ref =
         setup_endpoint(
@@ -24,51 +22,21 @@ defmodule Budget.Nu.Adapters.HttpTest do
           response_body: build_discovery_app_response(base_url)
         )
 
-      assert %{} = Http.discovery_app(base_url: base_url)
+      assert %{body: %{"token" => _}} = Http.discovery(base_url: base_url)
 
       assert_received {:request, ^setup_ref, conn}
 
       assert %Plug.Conn{
                method: "GET",
                request_path: "/api/app/discovery",
-               req_headers: req_headers,
-               body_params: body_params
+               req_headers: req_headers
              } = conn
 
-      Jason.decode!(body_params)
-      |> IO.inspect(label: "====>>>> 30 ", pretty: true, limit: :infinity)
-
-      assert %{} = Jason.decode!(body_params)
-
       assert {"content-type", "application/json"} in req_headers
-      assert {"X-Correlation-Id", ""} in req_headers
-      assert {"User-Agent", "BudgetElixir/1.0.0"} in req_headers
     end
   end
 
-  defp options, do: Application.fetch_env!(:budget, Budget.Nu.Adapters.Http)
-
-  defp build_discovery_response(base_url) do
-    %{
-      "register_prospect_savings_web" => "#{base_url}/api/proxy",
-      "register_prospect_savings_mgm" => "#{base_url}/api/proxy",
-      "pusher_auth_channel" => "#{base_url}/api/proxy",
-      "register_prospect_debit" => "#{base_url}/api/proxy",
-      "reset_password" => "#{base_url}/api/proxy",
-      "business_card_waitlist" => "#{base_url}/api/proxy",
-      "register_prospect" => "#{base_url}/api/proxy",
-      "register_prospect_savings_request_money" => "#{base_url}/api/proxy",
-      "register_prospect_global_web" => "#{base_url}/api/proxy",
-      "register_prospect_c" => "#{base_url}/api/proxy",
-      "request_password_reset" => "#{base_url}/api/proxy",
-      "auth_gen_certificates" => "#{base_url}/api/proxy",
-      "login" => "#{base_url}/api/proxy",
-      "email_verify" => "#{base_url}/api/proxy",
-      "ultraviolet_waitlist" => "#{base_url}/api/proxy",
-      "auth_device_resend_code" => "#{base_url}/api/proxy",
-      "msat" => "#{base_url}/api/proxy"
-    }
-  end
+  defp opts, do: Application.fetch_env!(:budget, Budget.Nu.Adapters.Http)
 
   defp build_discovery_app_response(base_url) do
     %{
@@ -116,4 +84,26 @@ defmodule Budget.Nu.Adapters.HttpTest do
       "engage_and_create_credentials" => "#{base_url}/api/proxy"
     }
   end
+
+  # defp build_discovery_response(base_url) do
+  #   %{
+  #     "register_prospect_savings_web" => "#{base_url}/api/proxy",
+  #     "register_prospect_savings_mgm" => "#{base_url}/api/proxy",
+  #     "pusher_auth_channel" => "#{base_url}/api/proxy",
+  #     "register_prospect_debit" => "#{base_url}/api/proxy",
+  #     "reset_password" => "#{base_url}/api/proxy",
+  #     "business_card_waitlist" => "#{base_url}/api/proxy",
+  #     "register_prospect" => "#{base_url}/api/proxy",
+  #     "register_prospect_savings_request_money" => "#{base_url}/api/proxy",
+  #     "register_prospect_global_web" => "#{base_url}/api/proxy",
+  #     "register_prospect_c" => "#{base_url}/api/proxy",
+  #     "request_password_reset" => "#{base_url}/api/proxy",
+  #     "auth_gen_certificates" => "#{base_url}/api/proxy",
+  #     "login" => "#{base_url}/api/proxy",
+  #     "email_verify" => "#{base_url}/api/proxy",
+  #     "ultraviolet_waitlist" => "#{base_url}/api/proxy",
+  #     "auth_device_resend_code" => "#{base_url}/api/proxy",
+  #     "msat" => "#{base_url}/api/proxy"
+  #   }
+  # end
 end

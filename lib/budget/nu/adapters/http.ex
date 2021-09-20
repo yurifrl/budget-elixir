@@ -2,16 +2,9 @@ defmodule Budget.Nu.Adapters.Http do
   @discovery_endpoint "/api/discovery"
   @app_discovery_endpoint "/api/app/discovery"
 
-  def discovery(opts) do
-    [
-      {Tesla.Middleware.BaseUrl, base_url(opts)}
-      | get_middlewares()
-    ]
-    |> Tesla.client()
-    |> Tesla.get!(@discovery_endpoint)
-  end
+  @behaviour Budget.Nu.Adapter
 
-  def discovery_app(opts) do
+  def discovery(opts) do
     [
       {Tesla.Middleware.BaseUrl, base_url(opts)}
       | get_middlewares()
@@ -34,6 +27,13 @@ defmodule Budget.Nu.Adapters.Http do
 
   defp default_middlewares do
     [
+      {Tesla.Middleware.Headers,
+       [
+         {"X-Correlation-Id", "WEB-APP.pewW9"},
+         {"User-Agent", "BudgetElixir/1.0.0"},
+         {"Content-Type", "application/json"},
+         {"strict-transport-security", "max-age=31536000; includeSubdomains"}
+       ]},
       {Tesla.Middleware.Timeout, timeout: :timer.minutes(1)},
       Tesla.Middleware.DecodeJson,
       Tesla.Middleware.Logger,
