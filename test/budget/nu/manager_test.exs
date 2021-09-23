@@ -21,18 +21,18 @@ defmodule Budget.Nu.ManagerTest do
     test "sucess", context do
       %{options: options} = context
 
-      test_pid = self()
-
       NuMock
-      |> stub(:discovery, fn ->
-        send(test_pid, :discovery)
-
-        %{}
+      |> stub(:discovery, fn _ ->
+        %{foo: "bar"}
+      end)
+      |> stub(:token, fn _, _ ->
+        %{token: "foo"}
       end)
 
       start_supervised!({Manager, options})
 
-      assert_received :discovery
+      assert %{foo: "bar"} = Manager.discovery()
+      assert %{foo: "bar"} = Manager.discovery()
     end
   end
 end

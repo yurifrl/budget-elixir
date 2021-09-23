@@ -3,42 +3,46 @@ defmodule Budget.Nu.Manager do
 
   use GenServer
 
-  @ttl 10000
+  @ttl 1_000_000_000
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def get_token do
-    GenServer.call(__MODULE__, :get_token)
+  def discovery do
+    GenServer.call(__MODULE__, :discovery)
+  end
+
+  def token do
+    GenServer.call(__MODULE__, :token)
   end
 
   @impl true
   def init(opts) do
     adapter = Keyword.fetch!(opts, :adapter)
 
-    case adapter.discovery() do
-      response ->
-        # Process.send_after(self(), :discovery, @ttl)
+    Process.send_after(self(), :discovery, @ttl)
 
-        {:ok, %{discovery: response, adapter: adapter, opts: opts}}
+    discovery = adapter.discovery(opts)
+    token = adapter.token(discovery, opts)
 
-      {:error, reason} ->
-        {:stop, reason}
-    end
+    {:ok, %{discovery: discovery, adapter: adapter, token: token, opts: opts}}
   end
 
   @impl true
-  def handle_call(:get_discovery, _from, %{discovery: discovery} = state) do
+  def handle_call(:discovery, _from, %{discovery: discovery} = state) do
     {:reply, discovery, state}
   end
 
   @impl true
+  def handle_call(:token, _from, %{token: token} = state) do
+    {:reply, token, state}
+  end
+
+  @impl true
   def handle_info(:discovery, %{adapter: adapter} = state) do
-    response = adapter.discovery()
-
-    # Process.send_after(self(), :discovery, @ttl)
-
-    {:noreply, %{state | discovery: response}}
+    Process.send_after(self(), :discovery, @ttl)
+    discovery = adapter.discovery()
+    {:noreply, %{state | discovery: discovery}}
   end
 end

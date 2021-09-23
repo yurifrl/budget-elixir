@@ -3,13 +3,54 @@ defmodule Budget.Nu.Adapters.HttpTest do
 
   alias Budget.Nu.Adapters.Http
 
-  setup do
-    opts = opts()
-    username = Keyword.fetch!(opts, :username)
-    password = Keyword.fetch!(opts, :password)
-    cert_path = Keyword.fetch!(opts, :cert_path)
-    %{username: username, password: password, cert_path: cert_path}
-  end
+  @customer_id "3bcceb1c-1c0e-11ec-9621-0242ac130002"
+  @account_id "408edeb2-1c0e-11ec-9621-0242ac130002"
+  @access_token "access_token"
+
+  @account_feed_query "{
+    viewer {
+      savingsAccount {
+        id
+        feed {
+          id
+          __typename
+          title
+          detail
+          postDate
+          ... on TransferInEvent {
+            amount
+            originAccount {
+              name
+            }
+          }
+          ... on TransferOutEvent {
+            amount
+            destinationAccount {
+              name
+            }
+          }
+          ... on TransferOutReversalEvent {
+            amount
+          }
+          ... on BillPaymentEvent {
+            amount
+          }
+          ... on DebitPurchaseEvent {
+            amount
+          }
+          ... on BarcodePaymentEvent {
+            amount
+          }
+          ... on DebitWithdrawalFeeEvent {
+            amount
+          }
+          ... on DebitWithdrawalEvent {
+            amount
+          }
+        }
+      }
+    }
+  }"
 
   describe "discovery/1" do
     test "successful response", context do
@@ -22,7 +63,7 @@ defmodule Budget.Nu.Adapters.HttpTest do
           response_body: build_discovery_app_response(base_url)
         )
 
-      assert %{body: %{"token" => _}} = Http.discovery(base_url: base_url)
+      assert %{"token" => _} = Http.discovery(base_url: base_url)
 
       assert_received {:request, ^setup_ref, conn}
 
@@ -36,7 +77,119 @@ defmodule Budget.Nu.Adapters.HttpTest do
     end
   end
 
-  defp opts, do: Application.fetch_env!(:budget, Budget.Nu.Adapters.Http)
+  describe "token/2" do
+    test "successful response", context do
+      %{bypass: bypass, base_url: base_url} = context
+
+      setup_ref =
+        setup_endpoint(
+          bypass,
+          status_code: 200,
+          response_body: build_token_response(base_url)
+        )
+
+      assert %{
+               "_links" => _,
+               "access_token" => _,
+               "refresh_before" => _,
+               "refresh_token" => _,
+               "token_type" => "bearer"
+             } = Http.token(%{"token" => "#{base_url}/api/token/"}, opts())
+
+      assert_received {:request, ^setup_ref, conn}
+
+      assert %Plug.Conn{
+               method: "POST",
+               request_path: "/api/token/",
+               body_params: body_params
+             } = conn
+
+      assert %{
+               "grant_type" => "password",
+               "client_id" => "legacy_client_id",
+               "client_secret" => "legacy_client_secret",
+               "login" => "test",
+               "password" => "test"
+             } = Jason.decode!(body_params)
+    end
+  end
+
+  describe "events/2" do
+    test "successful response", context do
+      %{bypass: bypass, base_url: base_url} = context
+
+      setup_ref =
+        setup_endpoint(
+          bypass,
+          status_code: 200,
+          response_body: build_events_response(base_url)
+        )
+
+      assert %{
+               "as_of" => _,
+               "customer_id" => @customer_id,
+               "events" => [%{"account" => @account_id}]
+             } = Http.events(build_token_response(base_url), opts())
+
+      assert_received {:request, ^setup_ref, conn}
+
+      assert %Plug.Conn{
+               method: "GET",
+               request_path: "/api/customers/#{@customer_id}/feed",
+               req_headers: req_headers
+             } = conn
+
+      assert {"authorization", "Bearer #{@access_token}"} in req_headers
+    end
+  end
+
+  describe "feed/2" do
+    test "successful response", context do
+      %{bypass: bypass, base_url: base_url} = context
+
+      setup_ref =
+        setup_endpoint(
+          bypass,
+          status_code: 200,
+          response_body: build_feed_response()
+        )
+
+      assert %{
+               "data" => %{
+                 "viewer" => %{
+                   "savingsAccount" => %{
+                     "feed" => [
+                       %{
+                         "__typename" => "AddToReserveEvent",
+                         "detail" => _,
+                         "id" => _,
+                         "postDate" => _,
+                         "title" => _
+                       }
+                     ],
+                     "id" => _
+                   }
+                 }
+               }
+             } = Http.feed(build_token_response(base_url), opts())
+
+      assert_received {:request, ^setup_ref, conn}
+
+      assert %Plug.Conn{
+               method: "POST",
+               request_path: "/api/query",
+               body_params: body_params,
+               req_headers: req_headers
+             } = conn
+
+      assert %{
+               "variables" => %{},
+               "query" => @account_feed_query
+             } = Jason.decode!(body_params)
+
+      assert {"authorization", "Bearer #{@access_token}"} in req_headers
+    end
+  end
 
   defp build_discovery_app_response(base_url) do
     %{
@@ -85,25 +238,90 @@ defmodule Budget.Nu.Adapters.HttpTest do
     }
   end
 
-  # defp build_discovery_response(base_url) do
-  #   %{
-  #     "register_prospect_savings_web" => "#{base_url}/api/proxy",
-  #     "register_prospect_savings_mgm" => "#{base_url}/api/proxy",
-  #     "pusher_auth_channel" => "#{base_url}/api/proxy",
-  #     "register_prospect_debit" => "#{base_url}/api/proxy",
-  #     "reset_password" => "#{base_url}/api/proxy",
-  #     "business_card_waitlist" => "#{base_url}/api/proxy",
-  #     "register_prospect" => "#{base_url}/api/proxy",
-  #     "register_prospect_savings_request_money" => "#{base_url}/api/proxy",
-  #     "register_prospect_global_web" => "#{base_url}/api/proxy",
-  #     "register_prospect_c" => "#{base_url}/api/proxy",
-  #     "request_password_reset" => "#{base_url}/api/proxy",
-  #     "auth_gen_certificates" => "#{base_url}/api/proxy",
-  #     "login" => "#{base_url}/api/proxy",
-  #     "email_verify" => "#{base_url}/api/proxy",
-  #     "ultraviolet_waitlist" => "#{base_url}/api/proxy",
-  #     "auth_device_resend_code" => "#{base_url}/api/proxy",
-  #     "msat" => "#{base_url}/api/proxy"
-  #   }
-  # end
+  defp build_token_response(base_url) do
+    %{
+      "_links" => %{
+        "customer" => %{
+          "href" => "#{base_url}/api/customers/#{@customer_id}"
+        },
+        "ghostflame" => %{
+          "href" => "#{base_url}/api/query"
+        },
+        "events" => %{
+          "href" => "#{base_url}/api/customers/#{@customer_id}/feed"
+        },
+        "revoke_token" => %{
+          "href" => "#{base_url}/api/revoke"
+        },
+        "bills_summary" => %{
+          "href" => "#{base_url}/api/accounts/#{@account_id}/bills/summary"
+        }
+      },
+      "access_token" => @access_token,
+      "refresh_before" => "2021-09-30T01:14:44Z",
+      "refresh_token" => "bar",
+      "token_type" => "bearer"
+    }
+  end
+
+  defp build_events_response(base_url) do
+    %{
+      "_links" => %{
+        "updates" => %{
+          "href" =>
+            "#{base_url}/api/customers/#{@customer_id}/feed?feed-version=v1.5.1&since=2021-09-22T22:25:49.446Z"
+        }
+      },
+      "as_of" => "2021-09-22T22:25:49.446Z",
+      "customer_id" => @customer_id,
+      "events" => [
+        %{
+          "_links" => %{
+            "self" => %{
+              "href" => "#{base_url}/api/transactions/0eff93b6-1c20-11ec-9621-0242ac130002"
+            }
+          },
+          "account" => @account_id,
+          "amount" => 3789,
+          "amount_without_iof" => 3789,
+          "category" => "transaction",
+          "description" => "Ifood *Ifood",
+          "details" => %{
+            "status" => "unsettled",
+            "subcategory" => "card_not_present"
+          },
+          "href" => "nuapp://transaction/0eff93b6-1c20-11ec-9621-0242ac130002",
+          "id" => "0eff93b6-1c20-11ec-9621-0242ac130002",
+          "source" => "upfront_national",
+          "time" => "2021-09-22T22:25:48Z",
+          "title" => "restaurante",
+          "tokenized" => false
+        }
+      ]
+    }
+  end
+
+  defp build_feed_response() do
+    %{
+      "data" => %{
+        "viewer" => %{
+          "savingsAccount" => %{
+            "feed" => [
+              %{
+                "__typename" => "AddToReserveEvent",
+                "detail" => "R$ 10,54",
+                "id" => "00218ed0-1c20-11ec-9621-0242ac130002",
+                "postDate" => "2021-09-22",
+                "title" => "Saved money"
+              }
+            ],
+            "id" => "5a39f618-fad9-4047-8881-143a8b8cb93f"
+          }
+        }
+      }
+    }
+  end
+
+  defp opts(),
+    do: [username: "test", password: "test", cert_path: "/dev/null", key_path: "/dev/null"]
 end

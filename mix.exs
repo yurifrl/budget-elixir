@@ -30,6 +30,9 @@ defmodule Budget.MixProject do
     [
       {:tesla, "~> 1.4"},
       {:tesla_cache, "~> 1.1.0"},
+      {:mint, "~> 1.4"},
+      {:castore, "~> 0.1"},
+      {:certifi, "~> 2.6"},
       # Non-production dependencies.
       {:bypass, "~> 2.1", only: :test},
       {:credo, "~> 1.1.0", only: [:dev, :test], runtime: false},
@@ -43,7 +46,8 @@ defmodule Budget.MixProject do
 
   defp aliases do
     [
-      t: ["test --max-failures 1 --seed 0"]
+      t: ["test --max-failures 1 --seed 0"],
+      external: ["test --max-failures 1 --seed 0 --include external:true"]
     ]
   end
 end
